@@ -23,12 +23,13 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
 )
 
-# Path to Flutter web build
+# Path to Flutter web build (optional — only used if serving web from backend)
 WEB_BUILD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tradet_app', 'build', 'web')
+_static_folder = WEB_BUILD_DIR if os.path.isdir(WEB_BUILD_DIR) else None
 
 
 def create_app():
-    app = Flask(__name__, static_folder=WEB_BUILD_DIR, static_url_path='')
+    app = Flask(__name__, static_folder=_static_folder, static_url_path='')
     app.config.from_object(Config)
 
     # Enable CORS for Flutter web/mobile
