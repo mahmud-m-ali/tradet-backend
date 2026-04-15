@@ -23,8 +23,8 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
 )
 
-# Path to Flutter web build (optional — only used if serving web from backend)
-WEB_BUILD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tradet_app', 'build', 'web')
+# Path to Flutter web build — served from ~/tradet-backend-app/web/ on the server
+WEB_BUILD_DIR = os.path.join(os.path.dirname(__file__), 'web')
 _static_folder = WEB_BUILD_DIR if os.path.isdir(WEB_BUILD_DIR) else None
 
 
