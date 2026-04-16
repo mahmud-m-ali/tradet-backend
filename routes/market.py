@@ -68,6 +68,14 @@ def get_assets():
             asset_dict["data_source"] = "simulated"
             asset_dict["data_source_label"] = "Simulated / Manual entry"
 
+        # Compute compliance_level: halal > permissible > non_compliant
+        if asset_dict.get("is_haram", 0):
+            asset_dict["compliance_level"] = "non_compliant"
+        elif asset_dict.get("is_sharia_compliant", 1):
+            asset_dict["compliance_level"] = "halal"
+        else:
+            asset_dict["compliance_level"] = "permissible"
+
         # Add Sharia screening details
         if a["category_type"] == "equity":
             screening = screen_asset(

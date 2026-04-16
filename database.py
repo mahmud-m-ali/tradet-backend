@@ -164,6 +164,7 @@ def init_db():
             non_compliant_investment_ratio REAL DEFAULT 0.0,
             non_permissible_revenue_ratio REAL DEFAULT 0.0,
             is_active INTEGER DEFAULT 1,
+            is_haram INTEGER DEFAULT 0,
             trading_session_days TEXT,
             trading_session_start TEXT,
             trading_session_end TEXT,
@@ -398,6 +399,64 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_assets_symbol ON assets(symbol)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id, created_at DESC)")
 
+    # Schema migrations for existing databases
+    try:
+        cursor.execute("ALTER TABLE assets ADD COLUMN is_haram INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
+
+    # Migration: add Permissible Equities category if not present
+    existing_cat = cursor.execute(
+        "SELECT id FROM asset_categories WHERE name = 'Permissible Equities'"
+    ).fetchone()
+    if not existing_cat:
+        cursor.execute(
+            "INSERT INTO asset_categories (name, name_am, description, is_sharia_compliant, category_type) VALUES (?,?,?,?,?)",
+            ("Permissible Equities", "ተቀባይነት ያለው አክሲዮን", "Conventional companies in non-haram sectors — permissible for trade", 0, "equity"),
+        )
+        cat_id = cursor.execute("SELECT last_insert_rowid()").fetchone()[0]
+        permissible_migration = [
+            ("AWASH", "Awash Bank", "አዋሽ ባንክ", cat_id, "Largest private bank in Ethiopia — conventional banking with IFB window", "Share", 1, 500, 0, 0, 0),
+            ("DASHEN", "Dashen Bank", "ዳሽን ባንክ", cat_id, "Major Ethiopian private commercial bank — ESX listed", "Share", 1, 500, 0, 0, 0),
+            ("CBE", "Commercial Bank of Ethiopia", "የኢትዮጵያ ንግድ ባንክ", cat_id, "State-owned commercial bank — largest bank in Ethiopia", "Share", 1, 1000, 0, 0, 0),
+            ("ETHA", "Ethiopian Airlines", "ኢትዮጵያ አየር መንገድ", cat_id, "Africa's largest airline — aviation and logistics", "Share", 1, 200, 0, 0, 0),
+            ("EEP", "Ethiopian Electric Power", "የኢትዮጵያ ኤሌክትሪክ ኃይል", cat_id, "State power utility — hydro and renewable energy generation", "Share", 1, 500, 0, 0, 0),
+            ("DERBA", "Derba Midroc Cement", "ደርባ ሚድሮክ ሲሚንቶ", cat_id, "Ethiopia's largest cement producer — construction materials", "Share", 1, 300, 0, 0, 0),
+            ("COOP", "Cooperative Bank of Oromia", "የኦሮሚያ ህ/ሥራ ባንክ", cat_id, "Cooperative banking model serving agricultural communities", "Share", 1, 500, 0, 0, 0),
+            ("BUNNA", "Bunna Bank", "ቡና ባንክ", cat_id, "Mid-sized private commercial bank — conventional with IFB window", "Share", 1, 300, 0, 0, 0),
+        ]
+        for asset in permissible_migration:
+            try:
+                cursor.execute(
+                    """INSERT OR IGNORE INTO assets (symbol, name, name_am, category_id, description, unit,
+                       min_trade_qty, max_trade_qty, is_ecx_listed, is_sharia_compliant, is_haram)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    asset,
+                )
+                asset_id = cursor.execute("SELECT last_insert_rowid()").fetchone()[0]
+                # Add an initial price for each permissible asset
+                prices_map = {
+                    "AWASH": (980.00, 978.00, 982.00, 995.00, 970.00, 12500, 1.4),
+                    "DASHEN": (850.00, 848.00, 852.00, 865.00, 840.00, 9800, 0.9),
+                    "CBE": (560.00, 558.00, 562.00, 572.00, 552.00, 18200, 2.1),
+                    "ETHA": (1200.00, 1198.00, 1202.00, 1220.00, 1185.00, 4500, 1.8),
+                    "EEP": (320.00, 318.00, 322.00, 330.00, 315.00, 8900, -0.6),
+                    "DERBA": (740.00, 738.00, 742.00, 755.00, 730.00, 3200, 1.2),
+                    "COOP": (620.00, 618.00, 622.00, 632.00, 612.00, 5600, 0.5),
+                    "BUNNA": (490.00, 488.00, 492.00, 500.00, 483.00, 4100, -0.3),
+                }
+                sym = asset[0]
+                if sym in prices_map:
+                    cursor.execute(
+                        """INSERT INTO market_prices (asset_id, price, bid_price, ask_price, high_24h, low_24h, volume_24h, change_24h)
+                           VALUES (?,?,?,?,?,?,?,?)""",
+                        (asset_id,) + prices_map[sym],
+                    )
+            except Exception:
+                pass
+        conn.commit()
+
     conn.commit()
     return_db(conn)
 
@@ -422,6 +481,7 @@ def seed_data():
         ("Islamic Banks", "እስላማዊ ባንኮች", "Interest-free bank shares (Sharia native)", 1, "equity"),
         ("Halal Global Equities", "ዓለም አቀፍ ሀላል", "AAOIFI-screened global equities", 1, "equity"),
         ("Takaful & Insurance", "ተካፉል", "Sharia-compliant cooperative insurance", 1, "equity"),
+        ("Permissible Equities", "ተቀባይነት ያለው አክሲዮን", "Conventional companies in non-haram sectors — permissible for trade", 0, "equity"),
     ]
     cursor.executemany(
         "INSERT INTO asset_categories (name, name_am, description, is_sharia_compliant, category_type) VALUES (?,?,?,?,?)",
@@ -488,6 +548,25 @@ def seed_data():
         assets,
     )
 
+    # Permissible assets — conventional companies NOT in haram sectors (cat 8)
+    # is_sharia_compliant=0 (not AAOIFI-screened), is_haram=0 (not forbidden)
+    permissible_assets = [
+        ("AWASH", "Awash Bank", "አዋሽ ባንክ", 8, "Largest private bank in Ethiopia — conventional banking with IFB window", "Share", 1, 500, 0, 0, 0, None, None, None),
+        ("DASHEN", "Dashen Bank", "ዳሽን ባንክ", 8, "Major Ethiopian private commercial bank — ESX listed", "Share", 1, 500, 0, 0, 0, None, None, None),
+        ("CBE", "Commercial Bank of Ethiopia", "የኢትዮጵያ ንግድ ባንክ", 8, "State-owned commercial bank — largest bank in Ethiopia", "Share", 1, 1000, 0, 0, 0, None, None, None),
+        ("ETHA", "Ethiopian Airlines", "ኢትዮጵያ አየር መንገድ", 8, "Africa's largest airline — aviation and logistics", "Share", 1, 200, 0, 0, 0, None, None, None),
+        ("EEP", "Ethiopian Electric Power", "የኢትዮጵያ ኤሌክትሪክ ኃይል", 8, "State power utility — hydro and renewable energy generation", "Share", 1, 500, 0, 0, 0, None, None, None),
+        ("DERBA", "Derba Midroc Cement", "ደርባ ሚድሮክ ሲሚንቶ", 8, "Ethiopia's largest cement producer — construction materials", "Share", 1, 300, 0, 0, 0, None, None, None),
+        ("COOP", "Cooperative Bank of Oromia", "የኦሮሚያ ህ/ሥራ ባንክ", 8, "Cooperative banking model serving agricultural communities", "Share", 1, 500, 0, 0, 0, None, None, None),
+        ("BUNNA", "Bunna Bank", "ቡና ባንክ", 8, "Mid-sized private commercial bank — conventional with IFB window", "Share", 1, 300, 0, 0, 0, None, None, None),
+    ]
+    cursor.executemany(
+        """INSERT INTO assets (symbol, name, name_am, category_id, description, unit, min_trade_qty, max_trade_qty,
+           is_ecx_listed, is_sharia_compliant, is_haram, trading_session_days, trading_session_start, trading_session_end)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        permissible_assets,
+    )
+
     # Market prices (in ETB) — realistic sample data
     prices = [
         # ECX Commodities
@@ -535,6 +614,15 @@ def seed_data():
         # Takaful
         (37, 500.00, 498.00, 502.00, 510.00, 495.00, 600, 0.4),
         (38, 380.00, 378.00, 382.00, 388.00, 375.00, 450, 0.1),
+        # Permissible Equities
+        (39, 980.00, 978.00, 982.00, 995.00, 970.00, 12500, 1.4),   # AWASH
+        (40, 850.00, 848.00, 852.00, 865.00, 840.00, 9800, 0.9),    # DASHEN
+        (41, 560.00, 558.00, 562.00, 572.00, 552.00, 18200, 2.1),   # CBE
+        (42, 1200.00, 1198.00, 1202.00, 1220.00, 1185.00, 4500, 1.8), # ETHA
+        (43, 320.00, 318.00, 322.00, 330.00, 315.00, 8900, -0.6),   # EEP
+        (44, 740.00, 738.00, 742.00, 755.00, 730.00, 3200, 1.2),    # DERBA
+        (45, 620.00, 618.00, 622.00, 632.00, 612.00, 5600, 0.5),    # COOP
+        (46, 490.00, 488.00, 492.00, 500.00, 483.00, 4100, -0.3),   # BUNNA
     ]
     cursor.executemany(
         """INSERT INTO market_prices (asset_id, price, bid_price, ask_price, high_24h, low_24h, volume_24h, change_24h) VALUES (?,?,?,?,?,?,?,?)""",
@@ -544,7 +632,7 @@ def seed_data():
     # Add multiple price history entries for chart data
     import random
     random.seed(42)
-    for asset_id in range(1, 39):
+    for asset_id in range(1, 47):
         base_price = prices[asset_id - 1][1]
         for i in range(30):
             variation = random.uniform(-0.03, 0.03)

@@ -46,9 +46,9 @@ def place_order():
         return_db(conn)
         return jsonify({"error": "Asset not found or inactive"}), 404
 
-    if not asset["is_sharia_compliant"]:
+    if asset["is_haram"]:
         return_db(conn)
-        return jsonify({"error": "Asset is not Sharia compliant and cannot be traded"}), 403
+        return jsonify({"error": "Asset is prohibited under Sharia law (haram) and cannot be traded"}), 403
 
     # Check ECX trading session
     session = is_trading_open(
@@ -198,9 +198,13 @@ def place_order():
                     (user_id, data["asset_id"]),
                 )
             else:
+                # Reduce total_invested proportionally by cost basis of sold units
+                cost_basis_sold = holding["avg_buy_price"] * qty
+                new_total_invested = max(0.0, holding["total_invested"] - cost_basis_sold)
                 conn.execute(
-                    "UPDATE portfolios SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND asset_id = ?",
-                    (new_qty, user_id, data["asset_id"]),
+                    """UPDATE portfolios SET quantity = ?, total_invested = ?,
+                       updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND asset_id = ?""",
+                    (new_qty, new_total_invested, user_id, data["asset_id"]),
                 )
             conn.execute(
                 """INSERT INTO transactions (user_id, transaction_type, amount, balance_after, reference_id, description)
