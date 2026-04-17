@@ -79,15 +79,17 @@ def create_app():
             'max-age=31536000; includeSubDomains; preload'
         )
         # Content Security Policy — allow Flutter web assets from same origin
-        # and required inline scripts/styles for Flutter bootstrap
+        # and required inline scripts/styles for Flutter bootstrap.
+        # gstatic.com: Flutter CanvasKit WASM renderer + Google Fonts
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob:; "
-            "font-src 'self' data:; "
-            "connect-src 'self' https://tradet.amber.et wss://tradet.amber.et; "
-            "worker-src 'self' blob:; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "connect-src 'self' https://tradet.amber.et wss://tradet.amber.et "
+            "https://www.gstatic.com; "
+            "worker-src 'self' blob: https://www.gstatic.com; "
             "frame-ancestors 'none';"
         )
         # Remove server identification header
