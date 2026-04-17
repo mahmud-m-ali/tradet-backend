@@ -32,8 +32,12 @@ def create_app():
     app = Flask(__name__, static_folder=_static_folder, static_url_path='')
     app.config.from_object(Config)
 
-    # Enable CORS for Flutter web/mobile
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # Enable CORS for Flutter web/mobile — restrict to known origins (INSA CSMS)
+    CORS(app, resources={r"/api/*": {"origins": [
+        "https://tradet.amber.et",
+        "http://localhost:8000",   # local dev
+        "http://localhost:3000",   # local dev alt
+    ]}})
 
     # JWT for authentication
     JWTManager(app)
