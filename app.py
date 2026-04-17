@@ -88,7 +88,7 @@ def create_app():
             "img-src 'self' data: blob:; "
             "font-src 'self' data: https://fonts.gstatic.com; "
             "connect-src 'self' https://tradet.amber.et wss://tradet.amber.et "
-            "https://www.gstatic.com; "
+            "https://www.gstatic.com https://fonts.gstatic.com; "
             "worker-src 'self' blob: https://www.gstatic.com; "
             "frame-ancestors 'none';"
         )
