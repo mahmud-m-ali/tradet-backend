@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-PythonAnywhere scheduled task — update market prices and exchange rates.
+Scheduled task — update market prices and exchange rates.
 
-Set up in PythonAnywhere → Tasks tab:
-  Command: /home/atomahmud/TradEt/backend/.venv/bin/python /home/atomahmud/TradEt/backend/cron_update_prices.py
-  Schedule: Hourly (free tier) or every 5 min (paid)
+Run via cron or system scheduler:
+  Command: /path/to/.venv/bin/python /path/to/backend/cron_update_prices.py
+  Schedule: Hourly or every 5 minutes
 
 This script runs outside Flask, directly updating the SQLite database.
 """

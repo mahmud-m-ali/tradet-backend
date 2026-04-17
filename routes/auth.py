@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 import bcrypt
 from database import get_db, return_db
+from utils.encryption import encrypt_field, decrypt_field
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -55,12 +56,16 @@ def register():
 
     password_hash = bcrypt.hashpw(data["password"].encode(), bcrypt.gensalt()).decode()
 
+    # Encrypt PII fields at rest (INSA CSMS — Technology pillar)
+    enc_full_name = encrypt_field(data["full_name"])
+    enc_phone = encrypt_field(data["phone"])
+
     conn = get_db()
     try:
         conn.execute(
             """INSERT INTO users (email, phone, password_hash, full_name, account_type)
                VALUES (?, ?, ?, ?, ?)""",
-            (data["email"], data["phone"], password_hash, data["full_name"],
+            (data["email"], enc_phone, password_hash, enc_full_name,
              data.get("account_type", "individual")),
         )
         user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -121,7 +126,7 @@ def login():
         "user": {
             "id": user["id"],
             "email": user["email"],
-            "full_name": user["full_name"],
+            "full_name": decrypt_field(user["full_name"]),
             "kyc_status": user["kyc_status"],
             "account_type": user["account_type"],
         },
@@ -145,10 +150,12 @@ def submit_kyc():
         return jsonify({"error": f"ID type must be one of: {valid_id_types}"}), 400
 
     conn = get_db()
+    # Encrypt sensitive KYC fields at rest
     conn.execute(
         """UPDATE users SET kyc_id_type = ?, kyc_id_number = ?, kyc_status = 'verified',
            trade_license_number = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?""",
-        (data["id_type"], data["id_number"], data.get("trade_license_number"), user_id),
+        (data["id_type"], encrypt_field(data["id_number"]),
+         encrypt_field(data.get("trade_license_number")), user_id),
     )
     conn.execute(
         "INSERT INTO audit_log (user_id, action, entity_type, details) VALUES (?, ?, ?, ?)",
@@ -175,8 +182,8 @@ def get_profile():
     return jsonify({
         "id": user["id"],
         "email": user["email"],
-        "phone": user["phone"],
-        "full_name": user["full_name"],
+        "phone": decrypt_field(user["phone"]),
+        "full_name": decrypt_field(user["full_name"]),
         "kyc_status": user["kyc_status"],
         "account_type": user["account_type"],
         "wallet_balance": wallet["balance"] if wallet else 0,

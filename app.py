@@ -57,6 +57,40 @@ def create_app():
         if request.path.startswith('/api/'):
             app.logger.debug(f"{request.method} {request.path} from {request.remote_addr}")
 
+    # ── Security headers (INSA CSMS §Technology pillar) ──────────────────────
+    @app.after_request
+    def set_security_headers(response):
+        # Prevent clickjacking
+        response.headers['X-Frame-Options'] = 'DENY'
+        # Prevent MIME-type sniffing
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        # Referrer policy
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        # Disable browser features not needed by this app
+        response.headers['Permissions-Policy'] = (
+            'camera=(), microphone=(), geolocation=(), payment=()'
+        )
+        # HSTS — only sent over HTTPS; 1 year + subdomains
+        response.headers['Strict-Transport-Security'] = (
+            'max-age=31536000; includeSubDomains; preload'
+        )
+        # Content Security Policy — allow Flutter web assets from same origin
+        # and required inline scripts/styles for Flutter bootstrap
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' https://tradet.amber.et wss://tradet.amber.et; "
+            "worker-src 'self' blob:; "
+            "frame-ancestors 'none';"
+        )
+        # Remove server identification header
+        response.headers.pop('Server', None)
+        response.headers.pop('X-Powered-By', None)
+        return response
+
     # Global error handlers
     @app.errorhandler(429)
     def ratelimit_handler(e):
@@ -143,7 +177,7 @@ def create_app():
         init_db()
         seed_data()
 
-    # Start background price updater (disabled on PythonAnywhere via env var)
+    # Start background price updater (can be disabled via DISABLE_PRICE_UPDATER=true env var)
     if os.getenv('DISABLE_PRICE_UPDATER', '').lower() != 'true':
         try:
             from services.price_updater import start_price_updater

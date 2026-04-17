@@ -25,7 +25,7 @@ class ConnectionPool:
             timeout=30,
         )
         conn.row_factory = sqlite3.Row
-        # Use DELETE journal mode (WAL causes disk I/O errors on NFS / PythonAnywhere)
+        # Use DELETE journal mode (WAL can cause disk I/O errors on NFS mounts)
         conn.execute("PRAGMA journal_mode=DELETE")
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA busy_timeout=10000")
